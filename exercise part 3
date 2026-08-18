@@ -1,0 +1,53 @@
+1. Entry points and components involved 
+the entry point is usually a function like complete_task(task_id)in the main file or cli.py.
+
+COMPONENTS INVOLVED:
+CLI/UI - where you type "complete 5'
+task Manager- finds the tasks by ID
+Task model - updates the task state
+storage/JSON file - saves the change 
+
+2. code that handles state changes 
+python
+def complete_task(tasks_id:int) -> bool;
+    tasks = load_tasks()
+    for task in tasks:
+       if tasks.id == tasks_id:
+          tasks.completed= True      #state change 1:
+          task.completed_at = datetime.now()
+          save_tasks(tasks)
+          return True
+      return False
+
+3. DataFlow Diagram
+[user]
+   | calls"complete 5"
+[CLI:complete_task(task_id)]
+   |finds task in list
+[task manager:load_tasks()]
+   |updates fields
+[Tasks object: completed=True, completed_at=now]
+   |saves
+[storage:saves_tasks_to_json()]
+   | 
+   [json file updated]
+
+4. record
+
+### exercise part 3: mapping data flow
+
+1. Diagram of the data flow
+user -> CLI command -> Task Manager -> Task object update -> save to JSON file
+
+2. the state change that occur during task completions
+task.completed changes from False to True 
+task.completed_at changes from None to current datetime
+the task is now included in "completed_recently"analytics 
+
+3. potential points of failure int this process
+invalid task_id: if the ID doesn't exist, it could crash
+file write error: if saving to JSON fails, the change is lost
+Datetime error: if datetime.now()fails, completed_at won't be set
+
+4. how the application persists these changes
+the application changes by calling a save function that writes the updated list of tasks to a JSON file. This makes the completed state permanent even after the program closes.
