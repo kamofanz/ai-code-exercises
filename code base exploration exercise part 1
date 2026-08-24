@@ -1,0 +1,33 @@
+1. MAIN COMPONENTS
+TaskPriority(Enum): LOW=1, MEDIUM=2, HIGH=3, URGENT=4 - controls priority 
+TaskStatus(Enum): TODO="todo", IN_PROGRESS="in_progress", REVIEW="review", DONE="done" - controls status lifecycle
+Task class: The main model
+
+2. Task Creative Flow
+def__ init__ (self, title, description="", priority=MEDIUM, due_date=None, tags=None):
+   self.id = str(uuid.uuid4()) #auto generates unique ID
+   self.title = title
+   self.description = description
+   self.priority = priority 
+   self.status = TaskStatus.TODO #Every new task starts as TODO
+   self.created_at = datetime.now()
+   self.updated_at = self_created_at
+   self.due_date = due_date
+   self.completed_at = None
+   self.tags = tags or []
+
+3. Status Updates Flow
+def update(self, **kwargs):
+   for key, value in kwargs.items():
+     if hasattr(self, key):
+        setattr(self, key, value)
+  self.updated_at = datetime.now()
+
+this allows task.update(status=TaskStatus.DONE) or task.update(title="new title"). it updates any field and refreshes updated_at.
+
+4. Data storage:
+The Task objects are kept in memory inside TaskManager as a list/dict, and persisted to disk by storage.py. Storage likely converts each atsk to JSON and saves to a file, then loads it back and reconstruct task objects whenthe app starts. 
+Retrival is by searching for teh task id.
+
+5. Design Pattern:
+Enum Pattern for status/priority + Model pattern. The status uses a State-like flow: TODO -> IN_PROGRESS -> REVIEW -> DONE.
