@@ -1,0 +1,47 @@
+2. PLANNING
+2.1 identify which files i need to modify 
+
+a) app/models/task.py - Contains the Task model and TaskStatus Enum. i need it verify if ABANDONED is already a valid status. 
+b) app/services/task_service.py - Contains the core business logic like check_overdue_tasks() and update_tasks_status().
+c) tests/test_task_service.py - to add unit tests for the new rule.
+
+2.2 Outline the changes you would make to implement this rule:
+# in app/service/task_service.py 
+from datetime ikmport datetime, timedelta 
+from app.models.task import Task, TaskStatus, Priority
+
+OVERDUE_LIMIT_DAYS = 7
+
+def auto_abandon_overdue_tasks(db):
+   """Marks tasks overdue by > 7 days as abandoned, unless high priority."""
+   cutoff_date = datetime.utcnow() - timedelta(days=OVERDUE_LIMIT_DAYS)
+ 
+  query = db.query(Task).filter(
+    Task.due_date < cutoff_date,
+    Task.status != TaskStatus.ABANDONED,
+    Task.priority != Priority.HIGH,
+    Task.is_overdue == True
+    )
+
+#Bulk update
+updated_count = query.update({Task.status: TaskStatus.ABANDONED})
+db.commit()
+return updated_count
+
+in scheduler.py, i would add:
+scheduler.add_job(auto_abandon_overdue_tasks,'cron', hour=0, minute=0) #runs daily at midnight 
+
+2.3 Questions i would ask my team before implementing 
+
+a. should the user receive a notification/email when a task is auto_abandoned?
+b. is ABANDONED a reversible state, can the user restore it?
+c. how is high priority defined - is it priority == 3 or priority == 'HIGH'?
+
+3 Reflection
+
+a) When i prompted AI with "Explain where task status is updated in this codebase" and "where is the logic for overdue tasks?", it pointed me directly to task_sevice and scheduler.py. instead of searching file by file, AI showed me the flow: Model -> Service -> Scheduler. This helped me understand i should not put this logic in the API route, but in the service layer and run it via a cron job.
+
+b) i am still unsure if there are any database triggers or frontend validations that also check task status, and whether changing status to ABANDONED will trigger other events. i am also not fully clear on how Priority is stored.
+
+c) my next step would be to: 1) ask AI to generate a sequence diagram of the task lifecycle, 2) Review the existing unit tests for overdue logic .
+
