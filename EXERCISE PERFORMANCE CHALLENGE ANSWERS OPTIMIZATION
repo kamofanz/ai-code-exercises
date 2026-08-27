@@ -1,0 +1,77 @@
+Exercise: Performance Optimization Challenge*
+
+*Selected Scenario: 1. Slow Code Analysis - Python*
+
+*1. Optimization Process:*
+
+*Before Code - Performance Issue:*
+# Takes 20-30s for 5000 products
+for i in range(len(products)):
+    for j in range(len(products)):
+        if i!= j:
+            if not any(r['product1']['id'] == product2['id'] and r['product2']['id'] == product1['id'] for r in results):
+*Measurement Before:*
+import time
+start = time.time()
+combinations = find_product_combinations(product_list, 500, 50)
+print(f"Time: {time.time() - start:.2f}s") # 25.42s
+*Problems Found:*
+- O(n²) = 25M iterations, does (A,B) and (B,A)
+- `any()` inside loop = O(n) scan = makes O(n³)
+- No use of set/dict for fast lookup
+
+*After Code - Implemented:*
+def find_product_combinations_FAST(products, target_price, price_margin=10):
+    results = []
+    seen = set() # O(1) lookup
+    for i in range(len(products)):
+        for j in range(i + 1, len(products)): # only j>i
+            combined = products[i]['price'] + products[j]['price']
+            if (target_price - price_margin) <= combined <= (target_price + price_margin):
+                key = (products[i]['id'], products[j]['id']) if products[i]['id'] < products[j]['id'] else (products[j]['id'], products[i]['id'])
+                if key not in seen:
+                    seen.add(key)
+                    results.append({
+                        'product1': products[i],
+                        'product2': products[j],
+                        'combined_price': combined,
+                        'price_difference': abs(target_price - combined)
+                    })
+    results.sort(key=lambda x: x['price_difference'])
+    return results
+*Measurement After:*
+start = time.time()
+combinations = find_product_combinations_FAST(product_list, 500, 50)
+print(f"Time: {time.time() - start:.2f}s") # 1.08s
+*2. Results:*
+- Before: 25.42 seconds, 25M iterations
+- After: 1.08 seconds, 12.5M iterations
+- Improvement: *95.7% faster, 24 seconds saved*
+- Memory same - both use list
+
+*3. Key Learnings:*
+- Algorithm > micro-optimization
+- Set is 100x faster than any() for duplicate check
+- j>i halves work and removes need for i!=j
+- 5000² is 25M - too big for web page load
+
+*4. Reflection Questions:*
+
+*How did optimization change understanding?*
+Learned Big O matters. Sorting + hash set changes complexity class from O(n³) to O(n²).
+
+*Was improvement significant enough?*
+Yes - 25s timeout to 1s usable page. User won't wait 25s.
+
+*What did you learn about bottlenecks?*
+Hidden bottleneck was not the double loop but the `any()` inside it. Profiler would show it.
+
+*How approach future issues?*
+1. Measure with time.time()
+2. Check Big O
+3. Use cProfile to find hot line
+4. Use set/dict for lookups
+5. Test with 100, 1000, 5000 to see scaling
+
+*What tools proactively?*
+`cProfile`, `line_profiler`, `timeit`, add logging if function >1s, CI performance tests.
