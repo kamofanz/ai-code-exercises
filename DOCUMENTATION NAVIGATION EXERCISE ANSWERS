@@ -1,0 +1,226 @@
+ FastAPI Documentation Navigation:
+
+### Part 1: Documentation Summarization - Personal Reading Guide*
+
+*Prompt I used:* Based on fastapi.tiangolo.com what reading order for REST API builder?
+
+*AI Roadmap for ME - 5 Phases - Skip Tutorial Fluff:*
+
+*For Quick REST API builder - Read in this order:*
+
+1. *First Steps* `/tutorial/first-steps/` + Path Parameters + Query Params - 20 min - you can already build CRUD
+2. *Body + Pydantic Models* `/tutorial/body/` + `/tutorial/body-multiple-params/` - core validation magic
+3. *Security* `/tutorial/security/first-steps` + `/tutorial/security/oauth2-jwt/` - auth is 80% of real APIs
+4. *Dependencies* `/tutorial/dependencies/` - THIS IS THE HEART - understand Depends() and you understand FastAPI
+5. *Advanced* - Background Tasks + Error Handling + APIRouter for scaling
+
+*5 Most Important Sections for Fast ship:*
+- `/tutorial/query-params/` - filtering, pagination
+- `/tutorial/body/` - POST validation
+- `/tutorial/dependencies/` - DI = reusable auth/db
+- `/tutorial/security/` - JWT practical
+- `/tutorial/bigger-applications/` - structure with routers
+
+*Dependency Injection Summary (practical):*
+- `Depends()` = function that runs before your route
+- Use for: get DB session, check auth, validate API key
+- Can depend on other dependencies -> chain: `verify_token` -> `get_current_user` -> `get_active_user`
+- `yield` dependency = setup + teardown (DB open/close) - most powerful pattern
+
+*My Reading Style:* Skip long explanations, go straight to code examples, then back to text if code fails. Official docs have too many examples - focus on "Recap" sections.
+
+---
+
+### *Part 2: Deep Dive - I chose Dependency Injection + Security*
+
+*Core Concepts from Docs:*
+
+*Depends - Why it matters:*
+Without DI: every route does `user = check_auth(token); if not user: raise 401` repeated 20 times.
+With DI: `current_user: User = Depends(get_current_user)` - 1 line, testable, auto docs show lock icon.
+
+*When to use vs NOT use:*
+- USE: Reusable logic (auth, DB, permissions), needs to be overridden in tests
+- DON'T USE: Simple helper that doesn't need request context - just call function directly. Over-using Depends makes flow hidden.
+
+*Security Docs Most Relevant for Auth API:*
+- `OAuth2PasswordBearer` - extracts token from header `Authorization: Bearer xxx`
+- `OAuth2PasswordRequestForm` - handles login form `username=&password=` parsing
+- `get_current_user` dependency pattern - docs recommend this exact structure, don't invent own
+
+*WebSockets* - I skipped because not needed for REST, but docs say: `@app.websocket("/ws")` + `await websocket.accept()` + loop `await websocket.receive_text()` - good for chat/notifications.
+
+*My Notes - Practical Application:*
+# Pattern from docs - this is gold:
+def get_db():
+    db = SessionLocal()
+    try: yield db
+    finally: db.close()
+
+@app.get("/items")
+def read_items(db = Depends(get_db), user = Depends(get_current_user)):
+    # db auto closed after, user auto checked - 0 boilerplate in route
+---
+
+### *Part 3: Concept to Code Translation - My Reference Guide*
+
+*I asked: Show path operation decorators*
+# Path operation decorators = @app.get/post/put/delete etc
+# They are same function, different HTTP method
+
+@app.get("/items") # READ list - idempotent, cacheable
+def list_items():...
+
+@app.post("/items", status_code=201) # CREATE - not idempotent
+def create_item(item: Item):...
+
+@app.put("/items/{id}") # REPLACE whole object
+def update_item(id: int, item: Item):...
+
+@app.patch("/items/{id}") # UPDATE partial - common mistake: use PUT when you mean PATCH
+def patch_item(id: int, item: ItemPatch):...
+
+@app.delete("/items/{id}", status_code=204) # DELETE - 204 no content standard
+def delete_item(id: int):...
+*Background Tasks from docs:*
+from fastapi import BackgroundTasks
+
+def write_log(email: str):
+    with open("log.txt","a") as f: f.write(f"sent to {email}\n")
+
+@app.post("/send-email/")
+def send_email(email: str, background_tasks: BackgroundTasks):
+    # Response returns immediately, email sent after
+    background_tasks.add_task(write_log, email)
+    return {"message":"Email will be sent"}
+# Use when: email, analytics, cache invalidation - not for critical DB writes
+---
+
+### *Part 4: Comprehensive Challenge - Blog API from Docs*
+
+*Docs sections I focused per feature:*
+- Auth -> `/tutorial/security/oauth2-jwt/`
+- Posts CRUD -> `/tutorial/body/` + `/tutorial/path-params/`
+- Comments -> `/tutorial/bigger-applications/` nested routers
+- Search -> `/tutorial/query-params/`
+
+*Complete `blog_main.py` - Single file based strictly on docs approach:*
+# pip install fastapi uvicorn python-jose[cryptography] passlib[bcrypt] python-multipart
+from fastapi import FastAPI, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
+app = FastAPI(title="Blog API - Docs Based")
+SECRET_KEY="blog-secret-key"; ALGORITHM="HS256"
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# DBs
+users_db={}; posts_db={}; comments_db={}; post_id_counter=0; comment_id_counter=0
+
+# Models from docs pattern
+class UserCreate(BaseModel): username: str; password: str
+class User(BaseModel): username: str
+class Token(BaseModel): access_token: str; token_type: str
+
+class PostCreate(BaseModel):
+    title: str = Field(..., min_length=3)
+    content: str = Field(..., min_length=10)
+    tags: List[str]=[]
+
+class Post(PostCreate):
+    id: int; author: str; created_at: datetime; likes: int=0
+
+class CommentCreate(BaseModel): content: str = Field(..., min_length=1)
+class Comment(CommentCreate):
+    id: int; post_id: int; author: str; created_at: datetime
+
+# Auth from security docs
+def get_password_hash(p): return pwd_context.hash(p)
+def verify_password(p,h): return pwd_context.verify(p,h)
+def create_token(data: dict): return jwt.encode({**data, "exp":datetime.utcnow()+timedelta(minutes=30)}, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: str=Depends(oauth2_scheme)):
+    try:
+        payload=jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username=payload.get("sub")
+        if username not in users_db: raise HTTPException(status_code=401, detail="Invalid user")
+        return username
+    except JWTError: raise HTTPException(status_code=401, detail="Invalid token")
+
+# Routes - Auth
+@app.post("/register")
+def register(user: UserCreate):
+    if user.username in users_db: raise HTTPException(400, "User exists")
+    users_db[user.username]={"username":user.username, "hashed":get_password_hash(user.password)}
+    return {"message":"registered"}
+
+@app.post("/token", response_model=Token)
+def login(form_data: OAuth2PasswordRequestForm=Depends()):
+    u=users_db.get(form_data.username)
+    if not u or not verify_password(form_data.password, u["hashed"]):
+        raise HTTPException(401, "Bad credentials")
+    return {"access_token":create_token({"sub":form_data.username}), "token_type":"bearer"}
+
+# Routes - Posts CRUD from body docs
+@app.post("/posts", response_model=Post, status_code=201)
+def create_post(post: PostCreate, current_user: str=Depends(get_current_user)):
+    global post_id_counter; post_id_counter+=1
+    new_post=Post(id=post_id_counter, **post.dict(), author=current_user, created_at=datetime.now())
+    posts_db[post_id_counter]=new_post; return new_post
+
+@app.get("/posts", response_model=List[Post])
+def list_posts(
+    q: Optional[str]=Query(None, description="Search in title/content"),
+    tag: Optional[str]=None,
+    skip: int=0, limit: int=10
+):
+    items=list(posts_db.values())
+    if q: items=[p for p in items if q.lower() in p.title.lower() or q.lower() in p.content.lower()]
+    if tag: items=[p for p in items if tag in p.tags]
+    return items[skip:skip+limit]
+
+@app.get("/posts/{post_id}", response_model=Post)
+def get_post(post_id: int):
+    if post_id not in posts_db: raise HTTPException(404, "Post not found")
+    return posts_db[post_id]
+
+@app.put("/posts/{post_id}", response_model=Post)
+def update_post(post_id: int, post: PostCreate, current_user: str=Depends(get_current_user)):
+    if post_id not in posts_db: raise HTTPException(404)
+    if posts_db[post_id].author!=current_user: raise HTTPException(403, "Not author")
+    updated=Post(id=post_id, **post.dict(), author=current_user, created_at=posts_db[post_id].created_at, likes=posts_db[post_id].likes)
+    posts_db[post_id]=updated; return updated
+
+@app.delete("/posts/{post_id}", status_code=204)
+def delete_post(post_id: int, current_user: str=Depends(get_current_user)):
+    if post_id not in posts_db: raise HTTPException(404)
+    if posts_db[post_id].author!=current_user: raise HTTPException(403)
+    del posts_db[post_id]
+
+# Comments - nested resource from bigger apps docs
+@app.post("/posts/{post_id}/comments", response_model=Comment, status_code=201)
+def add_comment(post_id: int, comment: CommentCreate, current_user: str=Depends(get_current_user)):
+    if post_id not in posts_db: raise HTTPException(404, "Post not found")
+    global comment_id_counter; comment_id_counter+=1
+    new_c=Comment(id=comment_id_counter, post_id=post_id, **comment.dict(), author=current_user, created_at=datetime.now())
+    comments_db[comment_id_counter]=new_c; return new_c
+
+@app.get("/posts/{post_id}/comments", response_model=List[Comment])
+def list_comments(post_id: int):
+    return [c for c in comments_db.values() if c.post_id==post_id]
+
+# Run: uvicorn blog_main:app --reload -> /docs
+*How docs informed choices:*
+- Used `OAuth2PasswordBearer(tokenUrl="token")` exactly as security docs - not custom header
+- Used `Depends(get_current_user)` pattern from dependency docs for protected routes
+- Used `Query(None, description=...)` for search - from query params docs, gives docs UI help text
+- Used Pydantic `Field(min_length)` for validation - from body docs
+- Structure with single file but logic separated like `bigger-applications` suggests routers for v2
+- Return `201` for create, `204` for delete - from HTTP status docs
+
+*To extend:* Add `APIRouter(prefix="/posts")` to split file, add BackgroundTasks for email on new comment, add `yield` DB dependency when moving to real DB.
