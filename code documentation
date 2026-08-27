@@ -1,0 +1,152 @@
+PROMTH 1
+
+from datetime import datetime
+from enum import Enum
+import uuid
+
+class TaskPriority(Enum):
+    """Task priority levels, higher value = more urgent."""
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+    URGENT = 4
+
+class TaskStatus(Enum):
+    """Workflow status for a task."""
+    TODO = "todo"
+    IN_PROGRESS = "in_progress"
+    REVIEW = "review"
+    DONE = "done"
+
+class Task:
+    """
+    Represents a single task in the Python Task Manager.
+
+    This is the core data model used by all algorithms (priority score,
+    parser, merging). It stores identity, content, priority, status,
+    and timestamps for sync and sorting.
+
+    Attributes:
+        id (str): Unique UUID4 identifier.
+        title (str): Task title.
+        description (str): Detailed description.
+        priority (TaskPriority): Priority enum, default MEDIUM.
+        status (TaskStatus): Workflow status, default TODO.
+        created_at (datetime): Creation timestamp.
+        updated_at (datetime): Last modification timestamp.
+        due_date (datetime | None): Due date, optional.
+        completed_at (datetime | None): Completion time, set by mark_as_done().
+        tags (list[str]): List of tags.
+
+    Example:
+        >>> task = Task("Buy milk", priority=TaskPriority.HIGH, tags=["shopping"])
+        >>> task.mark_as_done()
+        >>> task.status
+        <TaskStatus.DONE: 'done'>
+    """
+
+    def __init__(self, title, description="", priority=TaskPriority.MEDIUM,
+                 due_date=None, tags=None):
+        """
+        Initialize a new Task.
+
+        Args:
+            title (str): Required task title.
+            description (str): Optional description, default "".
+            priority (TaskPriority): Priority level, default MEDIUM.
+            due_date (datetime | None): Optional due date, default None.
+            tags (list[str] | None): Optional tags, default empty list.
+
+        Returns:
+            None: Creates Task instance with auto-generated UUID and timestamps.
+
+        Notes:
+            - id generated via uuid.uuid4() as string
+            - created_at and updated_at set to datetime.now()
+            - tags uses `tags or []` to avoid mutable default argument bug
+        """
+        self.id = str(uuid.uuid4())
+        self.title = title
+        self.description = description
+        self.priority = priority
+        self.status = TaskStatus.TODO
+        self.created_at = datetime.now()
+        self.updated_at = self.created_at
+        self.due_date = due_date
+        self.completed_at = None
+        self.tags = tags or []
+
+    def update(self, **kwargs):
+        """
+        Update task attributes dynamically.
+
+        Args:
+            **kwargs: Any attribute key/value to update if attribute exists.
+                      e.g. title="New title", priority=TaskPriority.LOW
+
+        Returns:
+            None: Modifies in-place and updates updated_at.
+
+        Example:
+            >>> task.update(title="Buy almond milk", status=TaskStatus.IN_PROGRESS)
+
+        Edge case:
+            Silently ignores keys that don't exist via hasattr check.
+            Always updates updated_at even if no keys matched.
+        """
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+        self.updated_at = datetime.now()
+
+    def mark_as_done(self):
+        """
+        Mark task as completed.
+
+        Sets status to DONE and records completion timestamps. This is the
+        primary state change used by task_manager.py and merge logic.
+
+        Returns:
+            None
+
+        Side effects:
+            - status = TaskStatus.DONE
+            - completed_at = datetime.now()
+            - updated_at = completed_at
+
+        Example:
+            >>> task = Task("Write report")
+            >>> task.mark_as_done()
+            >>> task.is_overdue()
+            False
+        """
+        self.status = TaskStatus.DONE
+        self.completed_at = datetime.now()
+        self.updated_at = self.completed_at
+
+    def is_overdue(self):
+        """
+        Check if task is overdue.
+
+        Returns:
+            bool: True if due_date is past and status is not DONE, else False.
+                  Returns False if due_date is None.
+
+        Example:
+            >>> task.due_date = datetime(2020, 1, 1)
+            >>> task.is_overdue()
+            True
+        """
+        if not self.due_date:
+            return False
+        return self.due_date < datetime.now() and self.status!= TaskStatus.DONE
+
+
+
+
+  ANSWER FOR PROMPT 2: 
+  Intent and Logic Explanation.
+  1. High level: This is the data layer for the whole Python Task Manager. Every other algorithm depends on it. It provides identity (UUID), workflow (TODO->DONE), and sync support (updated_at, completed_at).
+  2. Step-by-step logic:*init* avoids Python pitfall tags=[] by using tags or []update() uses reflection hasattr/setattr to allow dynamic updates from parsermark_as_done() is not just status change - it sets 2 timestamps for merging algorithm to use LWWis_overdue() has guard if not due_date: return False + excludes DONE tasks.
+  3. Assumptions / Edge cases:Assumes system clock is correct for datetime.now()mark_as_done() overwrites completed_at if called twice (not idempotent safe)update() can overwrite id or created_at if passed in kwargs - should be protectedNo validation for due_date in the past.
+  4. Improvements:Make id read-only with @propertyIn update(), block id, created_at from being changedUse datetime.now(timezone.utc) for sync.
