@@ -1,0 +1,70 @@
+1. Entry points and components involved
+The main component involved is the Task class in models.py.1. Entry points and components involved
+The main component involved is the Task class in models.py.
+The important entry point for completing a task is:
+def mark_as_done(self):
+This method changes the task's status to DONE.
+The main components are:
+Task — represents the task.
+TaskStatus — defines the possible task states: TODO, IN_PROGRESS, REVIEW, and DONE.
+mark_as_done() — performs the task-completion state change.
+datetime.now() — records when the task was completed.
+updated_at — records when the task was last changed.
+task_manager.py — likely calls the Task methods, although its implementation isn't visible in the screenshots.
+Storage/persistence layer — likely responsible for saving the changed task, but its implementation isn't shown in the supplied code.
+2. Code that handles the state change
+The key code is:
+def mark_as_done(self):
+    self.status = TaskStatus.DONE
+    self.completed_at = datetime.now()
+    self.updated_at = self.completed_at
+When mark_as_done() is called:
+Before: status could be TODO, IN_PROGRESS, or REVIEW.
+After: status = TaskStatus.DONE
+At the same time:
+completed_at is set to the current date/time.
+updated_at is set to the same completion time.
+3. Complete data flow
+You can draw your diagram like this:
+User marks task as complete
+          ↓
+    task_manager.py
+          ↓
+   Task.mark_as_done()
+          ↓
+ ┌─────────────────────────┐
+ │ self.status = DONE      │
+ │ self.completed_at = now │
+ │ self.updated_at = now   │
+ └─────────────────────────┘
+          ↓
+   Task object updated
+          ↓
+   Storage / persistence
+          ↓
+   Updated task is saved
+Important: The screenshots don't show the actual code in task_manager.py or storage.py, so the exact persistence step cannot be confirmed from the code provided. The models.py code clearly shows the state changes, but not how they are saved.
+4. State changes during task completion
+The state changes are:
+Property
+Before completion
+After completion
+status
+Current status
+TaskStatus.DONE
+completed_at
+None
+Current date/time
+updated_at
+Previous update time
+Completion time
+5. Potential points of failure
+Potential failures include:
+The task ID may not identify an existing task.
+mark_as_done() may not be called.
+The task object may fail to update.
+The storage/persistence operation may fail.
+The application may crash before the updated task is saved.
+An invalid task or missing data could cause an error.
+6. How the application persists the changes
+The task completion process begins when the task manager receives a request to mark a task as complete. The task's mark_as_done() method changes its status to TaskStatus.DONE, records the completion time in completed_at, and updates updated_at. The updated task then needs to be passed to the application's storage layer so that the changes persist. Potential failures include an invalid task ID, failure to update the task, or failure to save the updated task
