@@ -1,0 +1,146 @@
+Contextual Learning Exercise:
+
+### Part 1: Framework Comparison - Translation Table*
+
+*I know Flask + Django -> FastAPI*
+I know this in Flask/Django | FastAPI equivalent | What's different?
+Flask `app.route()` / Django `urls.py` | `@app.get()` decorator | Same decorator idea but FastAPI uses type hints to generate docs automatically
+Flask `Blueprint` | `APIRouter` | Identical concept: `router = APIRouter(prefix="/items")` then `app.include_router(router)` - just naming
+Flask `request.json` manual check | Pydantic `BaseModel` | Flask: you validate manually. FastAPI: `def create(item: ItemCreate)` auto validates + returns 422
+Django Middleware `MIDDLEWARE = []` | `app.add_middleware()` + Dependencies | Django middleware global, FastAPI Dependencies are per-route, more granular - like `Depends(get_current_user)`
+Flask `flask_login` | `OAuth2PasswordBearer` + `Depends()` | Flask uses session cookie, FastAPI uses Dependency Injection for auth - cleaner, testable
+Django Forms `form.is_valid()` | Pydantic `Field(..., gt=0)` | Django forms tied to HTML, FastAPI validation tied to API + type hints, same idea but API-first
+Django ORM Models | Pydantic Models (not DB) | Big shift: Pydantic!= DB model. Pydantic is validation layer, you still need SQLAlchemy for DB
+*Key insight:* Flask is synchronous, minimal. FastAPI feels like Flask with type hints superpowers + Django-like docs for free.
+
+---
+
+### *Part 2: Design Philosophy Summary*
+
+*Why Pydantic not own validator?*
+Don't reinvent wheel - Pydantic already uses Python type hints perfectly, battle-tested, fast (Rust core). FastAPI leverages it to get validation + serialization + docs from single source of truth.
+
+*Why auto docs?*
+In Flask/Django REST you write code THEN write Swagger separately - drifts. FastAPI generates OpenAPI from type hints at runtime - docs can never be outdated. Solves documentation hell.
+
+*Why type hints everywhere?*
+3 benefits from one hint:
+1. Validation at runtime
+2. Editor autocomplete
+3. Auto docs
+Python created type hints in 2015, FastAPI is first framework to fully exploit them.
+
+*Why async-first?*
+Flask synchronous = one request blocks thread. FastAPI on Starlette + async = can handle 1000s concurrent I/O (DB calls, API calls) on single thread. Built for modern microservices where you wait on network. Still supports sync `def` if you need.
+
+*My mental model:* FastAPI philosophy = *explicit types = less code*. If you type it, you don't need to validate it, document it, or serialize it separately.
+
+---
+
+### *Part 3: Applied - JWT Auth Working Code*
+
+*Save as `auth_main.py`:*
+# pip install fastapi uvicorn python-jose[cryptography] passlib[bcrypt] python-multipart
+
+from datetime import datetime, timedelta
+from typing import Optional
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from pydantic import BaseModel
+
+SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7" # dev only
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+fake_users_db = {
+    "johndoe": {
+        "username": "johndoe",
+        "full_name": "John Doe",
+        "email": "johndoe@example.com",
+        "hashed_password": "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW", # secret
+        "disabled": False,
+    }
+}
+
+class Token(BaseModel): access_token: str; token_type: str
+class User(BaseModel): username: str; email: Optional[str]=None
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+app = FastAPI(title="JWT Auth Demo")
+
+def authenticate_user(db, username, password):
+    if username in db and pwd_context.verify(password, db[username]["hashed_password"]):
+        return User(**db[username])
+    return None
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta]=None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username is None or username not in fake_users_db: raise JWTError()
+        return User(**fake_users_db[username])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate":"Bearer"})
+
+@app.post("/token", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+    token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=30))
+    return {"access_token": token, "token_type": "bearer"}
+
+@app.get("/users/me")
+async def read_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+@app.get("/items/me")
+async def read_my_items(current_user: User = Depends(get_current_user)):
+    return [{"item_id":1, "owner": current_user.username}]
+*Test:*
+1. `uvicorn auth_main:app --reload`
+2. POST `/token` form: username=johndoe password=secret -> get token
+3. Click Authorize button top right in /docs, paste token
+4. GET /users/me works
+
+*Reflection Answers:*
+
+- *vs Flask/Django auth:* Flask uses `flask-login` session cookies, server stores session. FastAPI JWT is stateless - token contains user, no server session. Django middleware checks every request globally, FastAPI `Depends()` only on routes you protect - explicit.
+
+- *Advantages of DI for auth:* Reusable - `Depends(get_current_user)` on any route, testable - can override dependency in tests with fake user, composable - `get_current_active_user` depends on `get_current_user` chaining.
+
+- *Type hinting makes security clearer:* `token: str = Depends(oauth2_scheme)` tells you exactly what you get, `-> User` return type guarantees downstream gets valid user object, not dict. No `request.user` magic.
+
+- *Patterns identified:* Same JWT flow as any framework - hash password, verify, create token with expiry, decode on each request. Adapter pattern: `OAuth2PasswordBearer` adapts header to token string.
+
+---
+
+### *Part 4: Mental Model Translation*
+
+*If Django = Middleware + Views + Models + URLs*
+
+*Then FastAPI = Dependencies + Path Operations + Pydantic Models + Routers*
+
+Diagram in words:
+Request -> Middleware (CORS, logging)
+        -> Dependency (auth, DB session)
+        -> Path Operation (@app.get)
+        -> Pydantic validation
+        -> Business logic
+        -> Pydantic response
+        -> JSON
+
+Django: Request -> Middleware -> URL Resolver -> View -> Form validation -> Model -> Template/JSON
+Flask: Request -> Before_request -> Route -> Manual validation -> Logic -> JSON
+FastAPI: Request -> Dependency Injection (does auth+validation) -> Typed function -> Auto JSON+Docs
+*Updated mental model:* Stop thinking "route function", start thinking "typed function with dependencies". The type IS the documentation, validation, and serialization. Dependencies replace both middleware and decorators.
