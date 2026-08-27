@@ -1,0 +1,62 @@
+Exercise 1 Java Readability - Fixed:*
+class UserManager {
+  private List<User> users;
+  private DBConn db;
+  public UserManager(DBConn d){db=d; users=new ArrayList<>();}
+  public boolean addUser(String username, String password, String email){
+    if(username.length()<3||password.length()<8||!email.contains("@")) return false;
+    if(findUserByUsername(username)!=null) return false;
+    User newUser=new User(username,password,email);
+    users.add(newUser);
+    return db.executePrepared("INSERT INTO users VALUES (?,?,?)",username,password,email);
+  }
+  public User findUserByUsername(String username){
+    for(User u:users) if(u.getUsername().equals(username)) return u;
+    return null;
+  }
+}
+class User{
+  private String username,password,email;
+  public User(String u,String p,String e){username=u;password=p;email=e;}
+  public String getUsername(){return username;}
+}
+Issue: `U`->`User`, `a()`->`addUser()`, `f()`->`findUserByUsername()`, SQL injection fixed with prepared statement.
+
+*Exercise 2 Python Refactor - Fixed:*
+def validate_order(order, inventory, customer_data):
+    if order['item_id'] not in inventory: return {'error':'Item not in inventory'}
+    if inventory[order['item_id']]['quantity']<order['quantity']: return {'error':'Insufficient'}
+    if order['customer_id'] not in customer_data: return {'error':'Customer not found'}
+    return None
+
+def calc_price(order, inventory, customer_data):
+    price=inventory[order['item_id']]['price']*order['quantity']
+    if customer_data[order['customer_id']]['premium']: price*=0.9
+    shipping=5.99 if customer_data[order['customer_id']]['location']=='domestic' and price<50 else 15.99 if customer_data[order['customer_id']]['location']!='domestic' else 0
+    return price+shipping+price*0.08
+
+def process_orders(orders, inventory, customer_data):
+    results, errors, revenue = [], [], 0
+    for o in orders:
+        err=validate_order(o,inventory,customer_data)
+        if err: errors.append(err); continue
+        final=calc_price(o,inventory,customer_data)
+        inventory[o['item_id']]['quantity']-=o['quantity']
+        revenue+=final
+        results.append({'order_id':o['order_id'],'final_price':final})
+    return {'processed':results,'errors':errors,'revenue':revenue}
+*Exercise 3 JS Duplication - Fixed:*
+function calculateUserStatistics(userData){
+  const getStats=field=>{
+    const vals=userData.map(u=>u[field]);
+    return {average: vals.reduce((a,b)=>a+b,0)/vals.length, highest: Math.max(...vals)}
+  };
+  return {age:getStats('age'),income:getStats('income'),score:getStats('score')}
+}
+Pattern: 6 identical loops -> 1 reusable `getStats()` - uses `map`+`reduce`.
+
+*Reflection:*
+- Most useful: Function Refactoring
+- AI found: SQL injection, duplicate loops, long function doing 4 things
+- Disagree: Over-engineering with factories
+- Safeguard: Tests before refactor
