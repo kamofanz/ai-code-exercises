@@ -1,0 +1,26 @@
+Prompt 2: Deepen understanding of a codebase
+
+I have been looking at the TaskManager codebase. My initial understanding of the task prioritization system is:
+
+Tasks have a priority field that uses an Enum with 4 levels: LOW=1, MEDIUM=2, HIGH=3, URGENT=4.
+-Default priority is MEDIUM when a task is created.
+-I think tasks can be sorted or filtered by this priority value.
+-Priority is set during creation and can be changed via the update() method.
+
+2. AI questions like these for task_manager.py
+
+- Q: How is priority used for sorting? A:
+  =It sorts by priority.value - so URGENT (4) comes first, LOW (1) last. Reverse sort.
+- Q: Is priority just a label or does it affect behavior? A:
+  =It affects sorting, filtering, and maybe due dates / urgent tags.
+- Q: Can priority change after creation? A:
+  =Yes, via task.update(priority=TaskPriority.HIGH) which updates updated_at.
+
+3. Your initial understanding vs what you discovered:
+ Initially I thought priority was just a text label (low/medium/high). After examining the code I discovered it's an Enum with numeric values (LOW=1 to URGENT=4) which allows for logical comparison and sorting. Default is MEDIUM.
+
+ Key insights the guided questions helped you uncover:
+ The numeric values are intentional - they enable sorting by importance. The system likely has a method in task_manager.py that sorts tasks by http://priority.value in descending order so URGENT tasks appear first. Also priority is immutable via Enum so invalid priorities cannot be set.
+
+Any misconceptions that were clarified:
+I thought priority would be a string. I was wrong - using Enum prevents typos like "hig" vs "high" and makes filtering safe. I also thought priority was fixed at creation, but the update() method allows changing it later.
