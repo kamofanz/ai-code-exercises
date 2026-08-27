@@ -1,0 +1,133 @@
+*Activity 1: Idiomatic Code Transformation*
+
+*My Original Code (before):*
+def get_active_users(users):
+    active = []
+    for i in range(len(users)):
+        user = users[i]
+        if user['active'] == True:
+            if user['email']!= None:
+                active.append(user['email'])
+    return active
+*AI Suggestions Implemented:*
+def get_active_users(users):
+    return [user['email'] for user in users if user.get('active') and user.get('email')]
+*What changed & why idiomatic:*
+1. List comprehension vs manual append loop - Pythonic, faster C-level loop
+2. `for user in users` vs `range(len(users))` - direct iteration, no index
+3. `user.get('active')` vs `== True` and `!= None` - truthy check, handles missing keys, PEP8
+
+*3 Key Learnings:*
+1. *Python favors declarative over imperative* - list comps describe WHAT not HOW. 4 lines -> 1 line but more readable once you know pattern.
+2. *Truthiness is feature not bug* - `if user.get('email')` handles None, '', missing key in one check - Java/C style explicit checks are anti-idiomatic in Python.
+3. *Direct iteration* - `for item in collection` is always preferred to `range(len())` unless you actually need index. Using `enumerate()` if you need both.
+
+---
+
+### *Activity 2: Code Quality Detective*
+
+*Old Code I reviewed (3 months ago):*
+def process_data(data, flag):
+    result=[]
+    try:
+        for d in data:
+            if flag==1:
+                x=d*2
+                result.append(x)
+            elif flag==2:
+                x=d*3
+                result.append(x)
+            else:
+                print("bad flag")
+    except:
+        print("error happened")
+        return None
+    return result
+*Checklist Created:*
+- [ ] Bare `except:` hides bugs - should be specific `except Exception`
+- [ ] Magic flag numbers 1,2 - use enum / string constants
+- [ ] Prints instead of raising/logging - breaks pipeline
+- [ ] Duplicated append logic
+- [ ] No type hints, docstring
+- [ ] Returning None on error - forces caller to check
+
+*Fixed Version:*
+from enum import Enum
+class Operation(Enum):
+    DOUBLE=1
+    TRIPLE=2
+
+def process_data(data: list[int], operation: Operation) -> list[int]:
+    multipliers = {Operation.DOUBLE:2, Operation.TRIPLE:3}
+    if operation not in multipliers:
+        raise ValueError(f"Invalid operation {operation}")
+    return [d * multipliers[operation] for d in data]
+*Ratings Before:* Readability 3/10, Performance 5/10, Maintainability 2/10
+*After:* 9/10, 9/10, 9/10
+
+*3 Key Learnings:*
+1. *Code smells compound* - flag param + bare except + prints = untestable function. One smell usually brings friends.
+2. *Fail loudly, not silently* - `print("error") + return None` made bugs invisible for weeks. Raise with context is Pythonic.
+3. *Checklist I now use:* Is there magic number? Is except specific? Is function doing >1 thing? Does it mutate or print instead of returning?
+
+---
+
+### *Activity 3: Understanding Language Feature - Python Decorators*
+
+*Feature Chosen:* Decorators - was scared of them
+
+*Simple Explanation:*
+Decorator = function that wraps another function to add behavior before/after without modifying it. Uses `@decorator` sugar for `func = decorator(func)`
+def log_time(func):
+    def wrapper(*args, **kwargs):
+        import time
+        start=time.time()
+        result=func(*args,**kwargs)
+        print(f"{func.__name__} took {time.time()-start:.2f}s")
+        return result
+    return wrapper
+
+@log_time
+def slow_function():
+    import time; time.sleep(1)
+*3 Practical Use Cases:*
+1. `@log_time` for performance monitoring
+2. `@require_auth` for API endpoints - check token before running
+3. `@cache` / `@lru_cache` - memoization for expensive calculations
+
+*Small Project Built:*
+def retry(max_attempts=3):
+    def decorator(func):
+        def wrapper(*args,**kwargs):
+            for attempt in range(max_attempts):
+                try:
+                    return func(*args,**kwargs)
+                except Exception as e:
+                    if attempt == max_attempts-1: raise
+                    print(f"Attempt {attempt+1} failed: {e}, retrying...")
+        return wrapper
+    return decorator
+
+@retry(max_attempts=3)
+def call_unstable_api():
+    import random
+    if random.random() < 0.7: raise ConnectionError("API down")
+    return "Success"
+
+print(call_unstable_api())
+*Common Mistakes to Avoid:*
+- Forgetting `functools.wraps` - loses original function name/docstring
+- Not handling `_args, _*kwargs` - breaks decorated function signature
+- Decorator with args needs 2 levels of nesting
+
+*3 Key Learnings:*
+1. *Decorators are just higher-order functions* - not magic. `@A` is just `func = A(func)`. Once I saw that, fear gone.
+2. *Perfect for cross-cutting concerns* - logging, auth, retry, validation that shouldn't clutter business logic. DRY principle applied.
+3. *`functools.wraps` is mandatory* - without it debugging is nightmare, stack traces show `wrapper` not real name. AI feedback caught this immediately in my first version.
+
+---
+
+### *Common Themes Across All 3:*
+- Python rewards concise expression of intent, not verbose steps
+- Readability = maintainability = fewer bugs - all 3 activities pointed to same
+- Features like list comps, decorators, context managers exist to remove boilerplate I was manually writing
