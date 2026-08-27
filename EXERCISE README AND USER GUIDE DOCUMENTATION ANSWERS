@@ -1,0 +1,76 @@
+DOCUMENT 1: README.md - SUBMIT THISmd# Python Task Manager
+
+Offline-first task manager with priority scoring and sync conflict resolution. Built for Code Comprehension exercise.
+
+## Features
+- Task model with UUID, priority enum, status workflow
+- Priority scoring: LOW=10, MEDIUM=20, HIGH=40, URGENT=60 + due date + tags
+- Text parser: parses "!HIGH #tag tomorrow" into Task object
+- Offline sync: merge_task_lists() with DONE-wins + Last-Write-Wins
+
+## Installation
+Python 3.8+, no external dependencies
+```bash
+git clone repo
+cd task-manager
+python task_manager.pyUsagepythonfrom task_manager import Task, TaskPriority
+
+task = Task("Buy milk #shopping !HIGH", tags=["errand"])
+task.update(status="in_progress")
+task.mark_as_done()  # status=DONE, completed_at=now()
+print(task.is_overdue())  # False if DONEStructure
+task_manager.py -> Task class, mark_as_done(), is_overdue(), update()scoring.py -> calculate_task_score()parser.py -> parse_task_from_text()sync.py -> merge_task_lists(), resolve_task_conflict()Troubleshooting
+Clock skew -> use datetime.utcnow()tags=[] bug fixed with tags or []update() can overwrite id, don't pass idLicense: MITjavascript
+### **DOCUMENT 2: Step-by-Step Guide - SUBMIT THIS**
+
+```md
+# How to Merge Offline Tasks
+
+**Goal:** Sync local and remote tasks when same task edited offline.
+
+**Prerequisites:** Know Task has id, updated_at, status
+
+**Steps:**
+
+1. Prepare dicts:
+```python
+local = {t.id: t for t in local_tasks}
+remote = {t.id: t for t in remote_tasks}Merge:pythonmerged, cr, ur, cl, ul = merge_task_lists(local, remote)Conflict resolution for tasks in both:Step 1: Compare updated_at, newer title/description winsStep 2: If either is DONE, final is DONE (DONE wins)Step 3: Tags = local tags UNION remote tagsStep 4: merged updated_at = max(local, remote)Apply:pythonfor t in cl.values(): save_local(t)
+for t in ul.values(): save_local(t)
+# push cr, ur to remoteCommon mistake: Using list + list for tags creates duplicates. Use set union.
+If task un-completes after sync: DONE-wins logic missing, check resolve_task_conflict().javascript
+### **DOCUMENT 3: FAQ - SUBMIT THIS**
+
+```md
+# Task Manager FAQ
+
+**Getting Started**
+Q: What is this?
+A: Python task system with 3 algorithms from class exercise.
+
+Q: How to create task?
+A: Task("Title", priority=TaskPriority.HIGH, tags=["work"])
+
+**Features**
+Q: How scoring works?
+A: HIGH=40 + overdue 35 + blocker tag 8 + recent 5 = 48+. DONE = -50.
+
+Q: What does mark_as_done do?
+A: Sets status DONE, completed_at=now(), updated_at=completed_at for sync.
+
+Q: What is is_overdue?
+A: True if due_date < now() and status != DONE. False if no due_date.
+
+**Troubleshooting**
+Q: Title reverted after sync?
+A: Last-Write-Wins, newer updated_at wins. Check clock.
+
+Q: Tags duplicated?
+A: Fixed with set() union, not list extend.
+
+Q: Can update() break id?
+A: Yes, don't pass id in kwargs. Will be fixed.
+
+Q: What is DONE wins?
+A: If one side marked DONE, merged is always DONE even if older, to prevent un-completing.Submit those 3 files. That's it.
+For the class discussion say: "I used Task Manager project, most challenging was sync logic, I added 'include DONE wins' to my prompt
