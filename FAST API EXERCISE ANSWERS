@@ -1,0 +1,190 @@
+Full Exercise: Source Python -> Target Go*
+
+Goal: Build REST API in Go for e-commerce cart
+
+### *PART 1: Learning Journey Plan*
+
+*Prompt I used:* I'm proficient in Python and want to learn Go to Build REST API. Create structured plan with 4 phases...
+
+*AI Generated Plan Refined:*
+
+*Phase 1: Foundations - Go Philosophy Shift*
+Prerequisites: Python basics
+Steps:
+1. Install Go, GOPATH, go mod
+2. Static typing, var vs :=
+3. Functions multiple returns, error as value
+4. Structs vs Python classes, no inheritance
+5. `go run`, `go build`, `go fmt`
+Verification: Write CLI calculator with typed functions that returns (result, error)
+
+*Phase 2: Core Go - Concurrency & Interfaces*
+Prerequisites: Phase 1
+Steps:
+1. Interfaces implicit vs Python duck typing
+2. Slices vs lists, maps, zero values
+3. Goroutines vs threads
+4. Channels for communication
+5. Error wrapping with fmt.Errorf
+Verification: Build concurrent URL fetcher that fetches 5 URLs in parallel using goroutines + channels
+
+*Phase 3: Backend Building Blocks*
+Prerequisites: Phase 2
+Steps:
+1. net/http standard library, handlers
+2. JSON marshaling/unmarshaling with struct tags
+3. Middleware pattern
+4. Context package for request cancel
+5. Project layout, go mod tidy
+Verification: Build /health and /products JSON endpoints without frameworks
+
+*Phase 4: Production API*
+Prerequisites: Phase 3
+Steps:
+1. Chi or Gin router
+2. Connect to DB - database/sql
+3. Proper error handling & logging
+4. Write table-driven tests
+5. Dockerfile + deployment
+Verification: Full CRUD REST API with tests and docker
+
+---
+
+### *PART 2: Four-Step Prompting*
+
+*Step 1: Conceptual Understanding*
+Q: Philosophical differences Python vs Go?
+A:
+- Python: "There should be one obvious way", dynamic, batteries included, OOP + scripting
+- Go: Simplicity, explicit, static compiled, concurrency first, designed at Google for large teams + network services
+- Mental shift: No exceptions -> errors are values, No inheritance -> composition + interfaces, No None -> zero values, No GIL -> real parallelism
+- Misconception: Go is not "Python but faster" - it's anti-magic, verbose on purpose for readability at scale
+
+*Step 2: Step-by-Step Breakdown - Error Handling*
+Go: `result, err := doThing(); if err != nil { return err }`
+Python: `try: doThing() except Exception as e: handle`
+Go forces you to handle error where it happens, no hidden exception bubbling. Multiple return is idiomatic.
+
+*Step 3: Guided Implementation*
+package main
+
+import (
+ "fmt"
+ "errors"
+)
+
+func divide(a,b float64) (float64, error) {
+  if b==0 {
+    return 0, errors.New("cannot divide by zero")
+  }
+  return a/b, nil
+}
+
+func main(){
+  res, err := divide(10,0)
+  if err != nil {
+    fmt.Println("Error:", err)
+    return
+  }
+  fmt.Println(res)
+}
+Each part: `package main` entrypoint, `import` explicit, `(float64, error)` multiple return, `:=` short declare, `if err != nil` mandatory check
+
+*Step 4: Verification - My Code*
+func getUser(id int) (string, error) {
+  if id<=0 { return "", fmt.Errorf("invalid id %d", id) }
+  return "Bokamoso", nil
+}
+AI Feedback:
+1. Best practice YES - wrapped error with context, empty string zero value
+2. Improvement: Use custom type error for validation
+3. Next: Learn `errors.Is/As`
+4. Python habit showing: none, but you tried to use exceptions - good you used error return
+
+---
+
+### *PART 3: Advanced Prompting - 2 Techniques*
+
+*Technique 1: Context Effectively*
+Q: Explain Go interfaces vs Python abstract classes?
+A: Python needs `ABC` inheritance to define interface. Go interface is implicit - if your struct has `Read()` method, it automatically implements `io.Reader`. No `implements` keyword. Decouples definition from implementation - huge for large codebases.
+
+*Technique 2: Deep Understanding*
+My code:
+func fetchAll(urls []string) []string {
+  results := []string{}
+  for _, url := range urls {
+    results = append(results, http.Get... ) // sequential
+  }
+  return results
+}
+AI: Performance: O(n) sequential, slow. Alternative: goroutine per URL + channel to collect. Scale 10x: need worker pool with buffered channel + context timeout to avoid 1000 goroutines. Using errgroup would handle errors better.
+
+---
+
+### *PART 4: Mini-Project - CLI Text Processor in Go*
+
+*Spec:* Build wordcount CLI that counts lines, words, chars like `wc`
+
+*Plan AI gave:*
+- Components: flag parsing, file reading, counting logic, output formatting
+- Libraries: `flag`, `os`, `bufio`, `strings`
+- Files: `main.go`, `counter.go`, `counter_test.go`
+- Challenge from Python: No `split()` magic? Actually Go has `strings.Fields`, but no list comp - need loop
+
+*Implementation:*
+// main.go
+package main
+
+import (
+  "flag"
+  "fmt"
+  "os"
+)
+
+func main(){
+  filePath := flag.String("file","","path to file")
+  flag.Parse()
+  if *filePath=="" { fmt.Println("need file"); os.Exit(1) }
+  l,w,c, err := CountFile(*filePath)
+  if err!=nil { fmt.Println(err); os.Exit(1) }
+  fmt.Printf("%d lines %d words %d chars\n", l,w,c)
+}
+
+// counter.go
+package main
+
+import (
+  "bufio"
+  "os"
+  "strings"
+)
+
+func CountFile(path string) (lines, words, chars int, err error){
+  f, err := os.Open(path)
+  if err != nil { return 0,0,0,err }
+  defer f.Close()
+
+  scanner := bufio.NewScanner(f)
+  for scanner.Scan(){
+    lines++
+    line := scanner.Text()
+    chars += len(line) + 1 // + newline
+    words += len(strings.Fields(line))
+  }
+  err = scanner.Err()
+  return
+}
+*AI Review:*
+1. Idiomatic YES - defer Close, named returns, bufio.Scanner
+2. Refactor: separate counting from file I/O for testability - `CountReader(io.Reader)` 
+3. Python habit: you used `len()` correctly but forgot Go counts bytes not runes - use `utf8.RuneCountInString` for chars
+4. Next: Add table-driven tests with `strings.NewReader`
+
+*Reflection:*
+
+- Most effective prompting: *Tutor + Deep Understanding* - asking "what if 10x scale" forced Go concurrency thinking
+- Surprised: Go has no ternary operator, no exceptions, but code is MORE readable in team - explicit is intentional
+- Mental models: Python "easier to ask forgiveness" hindered - Go wants permission first. Python OOP helped with struct methods
+- Next time: Start with mini-project earlier, not 4 phases theory
+- Gaps: Still weak on context cancellation, interface design, and Go module versioning
