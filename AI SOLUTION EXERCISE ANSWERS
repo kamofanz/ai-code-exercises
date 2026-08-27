@@ -1,0 +1,36 @@
+Exercise: Limitations and Verification - mergeSort Bug*
+
+*Bug:* Line `j++` should be `i++` in leftover left loop - causes infinite loop.
+
+*AI Fix:* Change to `i++`
+
+*1. Collaborative Verification:*
+- Understanding: i never increments -> infinite loop
+- Tests: `[3][1][2]` => `[1][2][3]`, `[5][4][3][2][1]` => `[1][2][3][4][5]`, `[]` => `[]`, `[2][2][1]` => `[1][2][2]`
+- Verification: Ran tests with timeout - passes after fix, hangs before
+
+*2. Alternative Approaches:*
+- *Fix 1 (minimal):* `i++` - fastest
+- *Fix 2 (safe):* `return result.concat(left.slice(i)).concat(right.slice(j))` - no counter bug possible, more readable
+- Best: Fix 2 for production, Fix 1 for interview
+
+*3. Critical Eye:*
+- Weakness: Infinite loop crashes browser, not just wrong result
+- Assumption: Input is numbers, uses `<` not `<=` so unstable
+- Improvement: Use `<=` for stable sort + concat to prevent future j++/i++ bug
+
+*Final Verified Code:*
+function merge(left, right) {
+  let result = [], i=0, j=0;
+  while (i < left.length && j < right.length) {
+    if (left[i] <= right[j]) result.push(left[i++]);
+    else result.push(right[j++]);
+  }
+  while (i < left.length) { result.push(left[i]); i++; } // FIXED: was j++
+  while (j < right.length) { result.push(right[j]); j++; }
+  return result;
+}
+*Reflection:*
+- Confidence 60% -> 95% after verification
+- Most scrutiny: infinite loop vs wrong output
+- Most valuable: Critical Eye - found stability and hang risk
